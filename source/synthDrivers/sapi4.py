@@ -287,7 +287,6 @@ class SynthDriverAudio(COMObject):
 			# When playing, wait for the playback to finish.
 			with self._audioCond:
 				self._deviceUnClaiming = True
-				self._deviceUnClaimingBytePos = self._writtenBytes
 				self._audioCond.notify()
 		else:
 			# When not playing, this can finish immediately.
@@ -411,6 +410,9 @@ class SynthDriverAudio(COMObject):
 		while True:
 			with self._audioCond:
 				while not self._audioStopped and not (self._deviceStarted and self._audioQueue):
+					if self._deviceUnClaiming and not self._audioQueue:
+						# All audio and bookmarks are finished.
+						self._finishUnClaim()
 					if self._deviceStarted:
 						# Since WavePlayer.feed returns before the audio finishes,
 						# in order not to lose the final callbacks
@@ -424,17 +426,8 @@ class SynthDriverAudio(COMObject):
 						break
 					if not self._player:
 						continue
-					if self._deviceUnClaimingBytePos is not None:
-						# Closing in progress, wait for the audio to finish
-						self._player.feed(
-							None,
-							0,
-							lambda bytePos=self._deviceUnClaimingBytePos: self._finishUnClaim(bytePos),
-						)
-						self._deviceUnClaimingBytePos = None
-					else:
-						# Call feed to let WavePlayer check the callbacks
-						self._player.feed(None, 0, None)
+					# Call feed to let WavePlayer check the callbacks
+					self._player.feed(None, 0, None)
 				if self._audioStopped:
 					return
 				item = self._audioQueue.popleft()
@@ -461,13 +454,8 @@ class SynthDriverAudio(COMObject):
 			except COMError:
 				pass
 
-	def _finishUnClaim(self, bytePos: int):
-		"""Finishes the asynchronous UnClaim call.
-
-		:param bytePos: The written byte count when this UnClaim request is made.
-			This is checked to prevent triggering on outdated UnClaim requests."""
-		if not self._deviceUnClaiming or self._writtenBytes != bytePos:
-			return
+	def _finishUnClaim(self):
+		"""Finishes the asynchronous UnClaim call."""
 		self._player.stop()
 		self._deviceStarted = False
 		self._deviceUnClaiming = False
