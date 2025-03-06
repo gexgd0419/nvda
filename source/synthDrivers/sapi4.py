@@ -302,10 +302,10 @@ class SynthDriverAudio(COMObject):
 
 	def IAudio_Start(self) -> None:
 		"""Starts (or resumes) playing the audio in the buffer."""
+		if not self._deviceClaimed or self._deviceUnClaiming:
+			raise ReturnHRESULT(AudioError.NOT_CLAIMED, None)
 		if self._deviceStarted:
 			raise ReturnHRESULT(AudioError.ALREADY_STARTED, None)
-		if not self._deviceClaimed:
-			raise ReturnHRESULT(AudioError.NOT_CLAIMED, None)
 		self._startTime = datetime.now()
 		self._startBytes = self._playedBytes
 		try:
